@@ -133,18 +133,12 @@ function ShelterMatters.save()
 end
 
 function ShelterMatters:getCachedInShedStatus(vehicle)
-    local px, py, pz = getWorldTranslation(vehicle.rootNode)
     local cache = vehicle.shelterMatters_inShedCache
     if cache and cache.node == vehicle.rootNode then
-        local dx = px - cache.posX
-        local dy = py - cache.posY
-        local dz = pz - cache.posZ
-        if dx*dx + dy*dy + dz*dz < 4 then
-            return cache.value
-        end
+        return cache.value
     end
     local isInside = ShelterMatters.isVehicleInShed(vehicle)
-    vehicle.shelterMatters_inShedCache = { node = vehicle.rootNode, posX = px, posY = py, posZ = pz, value = isInside }
+    vehicle.shelterMatters_inShedCache = { node = vehicle.rootNode, value = isInside }
     return isInside
 end
 
