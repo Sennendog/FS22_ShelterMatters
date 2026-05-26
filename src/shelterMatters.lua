@@ -86,8 +86,6 @@ function ShelterMatters:loadMap(name)
 
     ConstructionScreen.setBrush = Utils.appendedFunction(ConstructionScreen.setBrush, self.indoorAreasShow)
     ConstructionScreen.onClose = Utils.appendedFunction(ConstructionScreen.onClose, self.indoorAreasHide)
-
-    Vehicle.setMotorStarted = Utils.appendedFunction(Vehicle.setMotorStarted, ShelterMatters.onVehicleMotorStarted)
 end
 
 function ShelterMatters.loadSettingsFromServer()
@@ -146,6 +144,14 @@ function ShelterMatters:draw()
     local vehicle = g_currentMission.controlledVehicle
     if vehicle and not self.hideShelterStatusIcon then
 
+        if vehicle.getIsOperating then
+            local isOperating = vehicle:getIsOperating()
+            if vehicle.shelterMatters_drawLastOperating ~= nil and vehicle.shelterMatters_drawLastOperating ~= isOperating then
+                vehicle.shelterMatters_inShedCache = nil
+            end
+            vehicle.shelterMatters_drawLastOperating = isOperating
+        end
+
         local uiScale = g_gameSettings:getValue("uiScale")
         local aspectRatio = g_screenAspectRatio
 
@@ -183,12 +189,6 @@ function ShelterMatters:getWeather()
     --DebugUtil.printTableRecursively(weatherObject, "Wheater: ", 0, 1)
 
     return weatherTypes[weatherType] or "UNKNOWN"
-end
-
-function ShelterMatters.onVehicleMotorStarted(vehicle, start, ...)
-    if not start then
-        vehicle.shelterMatters_inShedCache = nil
-    end
 end
 
 --[[
@@ -270,8 +270,14 @@ function ShelterMatters:updateDamageAmount(vehicle, elapsedInGameHours, multipli
         return
     end
 
-    -- should be not active or not operating
-    if vehicle.isActive and vehicle:getIsOperating() then
+    local isOperating = vehicle.isActive and vehicle:getIsOperating()
+
+    if vehicle.shelterMatters_lastOperating ~= nil and vehicle.shelterMatters_lastOperating ~= isOperating then
+        vehicle.shelterMatters_inShedCache = nil
+    end
+    vehicle.shelterMatters_lastOperating = isOperating
+
+    if isOperating then
         return
     end
 
