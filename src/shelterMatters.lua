@@ -86,6 +86,8 @@ function ShelterMatters:loadMap(name)
 
     ConstructionScreen.setBrush = Utils.appendedFunction(ConstructionScreen.setBrush, self.indoorAreasShow)
     ConstructionScreen.onClose = Utils.appendedFunction(ConstructionScreen.onClose, self.indoorAreasHide)
+
+    Vehicle.setMotorStarted = Utils.appendedFunction(Vehicle.setMotorStarted, ShelterMatters.onVehicleMotorStarted)
 end
 
 function ShelterMatters.loadSettingsFromServer()
@@ -131,13 +133,18 @@ function ShelterMatters.save()
 end
 
 function ShelterMatters:getCachedInShedStatus(vehicle)
+    local px, py, pz = getWorldTranslation(vehicle.rootNode)
     local cache = vehicle.shelterMatters_inShedCache
-    local now = g_currentMission.time
-    if cache and cache.node == vehicle.rootNode and (now - cache.time) < 1000 then
-        return cache.value
+    if cache and cache.node == vehicle.rootNode then
+        local dx = px - cache.posX
+        local dy = py - cache.posY
+        local dz = pz - cache.posZ
+        if dx*dx + dy*dy + dz*dz < 4 then
+            return cache.value
+        end
     end
     local isInside = ShelterMatters.isVehicleInShed(vehicle)
-    vehicle.shelterMatters_inShedCache = { node = vehicle.rootNode, time = now, value = isInside }
+    vehicle.shelterMatters_inShedCache = { node = vehicle.rootNode, posX = px, posY = py, posZ = pz, value = isInside }
     return isInside
 end
 
@@ -146,12 +153,16 @@ function ShelterMatters:draw()
     if vehicle and not self.hideShelterStatusIcon then
 
         local uiScale = g_gameSettings:getValue("uiScale")
+        local aspectRatio = g_screenAspectRatio
 
-        local startX = 1 - 0.0535 * uiScale + (0.04 * (uiScale - 0.5))
-        local startY = 0.05 * uiScale - (0.08 * (uiScale - 0.5))
-        local iconWidth = 0.01 * uiScale
-        local iconHeight = iconWidth * g_screenAspectRatio
-
+        local layout = self._cachedLayout
+        if not layout or layout.uiScale ~= uiScale or layout.aspectRatio ~= aspectRatio then
+            local startX = 1 - 0.0535 * uiScale + (0.04 * (uiScale - 0.5))
+            local startY = 0.05 * uiScale - (0.08 * (uiScale - 0.5))
+            local iconWidth = 0.01 * uiScale
+            layout = { uiScale = uiScale, aspectRatio = aspectRatio, startX = startX, startY = startY, iconWidth = iconWidth, iconHeight = iconWidth * aspectRatio }
+            self._cachedLayout = layout
+        end
 
         local childVehicles = vehicle.rootVehicle.childVehicles
 
@@ -166,7 +177,7 @@ function ShelterMatters:draw()
         local isInside = self:getCachedInShedStatus(vehicle)
         local icon = isInside and ShelterMatters.insideIcon or ShelterMatters.outsideIcon
 
-        renderOverlay(icon, startX, startY, iconWidth, iconHeight)
+        renderOverlay(icon, layout.startX, layout.startY, layout.iconWidth, layout.iconHeight)
     end
 end
 
@@ -178,6 +189,12 @@ function ShelterMatters:getWeather()
     --DebugUtil.printTableRecursively(weatherObject, "Wheater: ", 0, 1)
 
     return weatherTypes[weatherType] or "UNKNOWN"
+end
+
+function ShelterMatters.onVehicleMotorStarted(vehicle, start, ...)
+    if not start then
+        vehicle.shelterMatters_inShedCache = nil
+    end
 end
 
 --[[
@@ -264,7 +281,7 @@ function ShelterMatters:updateDamageAmount(vehicle, elapsedInGameHours, multipli
         return
     end
 
-    local inShed = ShelterMatters.isVehicleInShed(vehicle)
+    local inShed = self:getCachedInShedStatus(vehicle)
     if not inShed then
         local baseOutsideDamage = self:getDamageRate(vehicle) -- damage percentage per ingame hour
         local outsideDamage = (baseOutsideDamage * multiplier * elapsedInGameHours)

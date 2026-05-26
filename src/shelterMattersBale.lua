@@ -65,12 +65,28 @@ function Bale:setDecayAmount(decayAmount)
 end
 
 
+function ShelterMattersBale.getCachedInShedStatus(bale)
+    local px, py, pz = getWorldTranslation(bale.nodeId)
+    local cache = bale.shelterMatters_inShedCache
+    if cache and cache.node == bale.nodeId then
+        local dx = px - cache.posX
+        local dy = py - cache.posY
+        local dz = pz - cache.posZ
+        if dx*dx + dy*dy + dz*dz < 4 then
+            return cache.value
+        end
+    end
+    local isInside = ShelterMatters.isNodeInShed(bale.nodeId)
+    bale.shelterMatters_inShedCache = { node = bale.nodeId, posX = px, posY = py, posZ = pz, value = isInside }
+    return isInside
+end
+
 function ShelterMattersBale.updateBaleDamage(bale, elapsedInGameHours, rate)
     if bale.wrappingState == 1 then
-        return -- no damage is applied when the bale is wrapped
+        return
     end
 
-    local inShed = ShelterMatters.isNodeInShed(bale.nodeId)
+    local inShed = ShelterMattersBale.getCachedInShedStatus(bale)
     if not inShed then
         local outsideDamage = (rate * elapsedInGameHours)
         bale:addDecayAmount(outsideDamage)
