@@ -50,7 +50,7 @@ function ShelterMattersSyncEvent:readStream(streamId, connection)
 end
 
 function ShelterMattersSyncEvent:writeStream(streamId, connection)
-    if self.damageRates == nil or self.weatherMultipliers == nil or self.baleWeatherDecay == nill then
+    if self.damageRates == nil or self.weatherMultipliers == nil or self.baleWeatherDecay == nil then
         return
     end
 

@@ -11,6 +11,14 @@ ShelterMatters.isDevBuild = false -- Default is true; overridden by the build pr
 
 ShelterMatters.hideShelterStatusIcon = false
 
+local weatherTypes = {
+    [1] = "sunny",
+    [2] = "cloudy",
+    [3] = "rain",
+    [4] = "fog",
+    [5] = "snow",
+}
+
 -- default values for weather multipliers
 ShelterMatters.weatherMultipliers = {
     sunny  = 1.0, -- normal wear. vehicles experience no additional wear in sunny conditions.
@@ -122,6 +130,17 @@ function ShelterMatters.save()
     end
 end
 
+function ShelterMatters:getCachedInShedStatus(vehicle)
+    local cache = vehicle.shelterMatters_inShedCache
+    local now = g_currentMission.time
+    if cache and cache.node == vehicle.rootNode and (now - cache.time) < 1000 then
+        return cache.value
+    end
+    local isInside = ShelterMatters.isVehicleInShed(vehicle)
+    vehicle.shelterMatters_inShedCache = { node = vehicle.rootNode, time = now, value = isInside }
+    return isInside
+end
+
 function ShelterMatters:draw()
     local vehicle = g_currentMission.controlledVehicle
     if vehicle and not self.hideShelterStatusIcon then
@@ -144,7 +163,7 @@ function ShelterMatters:draw()
             end
         end
 
-        local isInside = ShelterMatters.isVehicleInShed(vehicle)
+        local isInside = self:getCachedInShedStatus(vehicle)
         local icon = isInside and ShelterMatters.insideIcon or ShelterMatters.outsideIcon
 
         renderOverlay(icon, startX, startY, iconWidth, iconHeight)
@@ -157,16 +176,6 @@ function ShelterMatters:getWeather()
 
     --local weatherObject = weatherSystem.typeToWeatherObject[weatherType]
     --DebugUtil.printTableRecursively(weatherObject, "Wheater: ", 0, 1)
-
-    -- Map the weather type to a string
-    -- TODO debug if these values are correct
-    local weatherTypes = {
-        [1] = "sunny",
-        [2] = "cloudy",
-        [3] = "rain",
-        [4] = "fog",
-        [5] = "snow",
-    }
 
     return weatherTypes[weatherType] or "UNKNOWN"
 end
@@ -289,12 +298,11 @@ function ShelterMatters.isNodeInShed(node)
     return false
 end
 
--- Function to calculate distance between two points in 3D space
-local function calculateDistance(x1, y1, z1, x2, y2, z2)
+local function calculateDistanceSquared(x1, y1, z1, x2, y2, z2)
     local dx = x2 - x1
     local dy = y2 - y1
     local dz = z2 - z1
-    return math.sqrt(dx * dx + dy * dy + dz * dz)
+    return dx * dx + dy * dy + dz * dz
 end
 
 -- Function to check if a vehicle is inside any indoor area of a placeable
@@ -304,9 +312,8 @@ function ShelterMatters.isPointInsideplaceable(x, y, z, placeable)
     end
 
     local rootX, rootY, rootZ = getWorldTranslation(placeable.rootNode)
-    local distance = calculateDistance(x, y, z, rootX, rootY, rootZ)
     -- optimization: no shed is bigger then 200 meters so we don't check when obtjects are further away then 100m from the placeable center
-    if distance > 100 then
+    if calculateDistanceSquared(x, y, z, rootX, rootY, rootZ) > 10000 then
         return false
     end
 
@@ -320,34 +327,30 @@ function ShelterMatters.isPointInsideplaceable(x, y, z, placeable)
     return false
 end
 
+local function transformToLocalSpace(worldX, worldY, worldZ, rootX, rootY, rootZ, rotY)
+    local relX, relY, relZ = worldX - rootX, worldY - rootY, worldZ - rootZ
+    local cosY = math.cos(-rotY)
+    local sinY = math.sin(-rotY)
+    local localX = relX * cosY - relZ * sinY
+    local localZ = relX * sinY + relZ * cosY
+    return localX, relY, localZ
+end
+
 function ShelterMatters.isPointInsideIndoorArea(x, y, z, indoorArea, placeable)
     -- Get the position and rotation of the root node
     local rootX, rootY, rootZ = getWorldTranslation(placeable.rootNode)
-    local rotX, rotY, rotZ = getWorldRotation(placeable.rootNode)
+    local _, rotY = getWorldRotation(placeable.rootNode)
 
     -- Get world positions of width and height nodes
     local startX, startY, startZ = getWorldTranslation(indoorArea.start)
     local widthX, widthY, widthZ = getWorldTranslation(indoorArea.width)
     local heightX, heightY, heightZ = getWorldTranslation(indoorArea.height)
 
-    -- Translate nodes to the root node's local space
-    local function transformToLocalSpace(worldX, worldY, worldZ)
-        local relX, relY, relZ = worldX - rootX, worldY - rootY, worldZ - rootZ
-
-        -- Apply rotation around the root node
-        local cosY = math.cos(-rotY)
-        local sinY = math.sin(-rotY)
-
-        local localX = relX * cosY - relZ * sinY
-        local localZ = relX * sinY + relZ * cosY
-        return localX, relY, localZ
-    end
-
     -- Convert indoor area nodes to local space
-    local localStartX, localStartY, localStartZ = transformToLocalSpace(startX, startY, startZ)
-    local localWidthX, localWidthY, localWidthZ = transformToLocalSpace(widthX, widthY, widthZ)
-    local localHeightX, localHeightY, localHeightZ = transformToLocalSpace(heightX, heightY, heightZ)
-    local localX, localY, localZ = transformToLocalSpace(x, y, z)
+    local localStartX, localStartY, localStartZ = transformToLocalSpace(startX, startY, startZ, rootX, rootY, rootZ, rotY)
+    local localWidthX, localWidthY, localWidthZ = transformToLocalSpace(widthX, widthY, widthZ, rootX, rootY, rootZ, rotY)
+    local localHeightX, localHeightY, localHeightZ = transformToLocalSpace(heightX, heightY, heightZ, rootX, rootY, rootZ, rotY)
+    local localX, localY, localZ = transformToLocalSpace(x, y, z, rootX, rootY, rootZ, rotY)
 
     -- Compute all possible bounds (accounting for reversed nodes)
     local minX = math.min(localStartX, localWidthX, localHeightX)
