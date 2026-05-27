@@ -148,6 +148,12 @@ function ShelterMatters:draw()
             local isOperating = vehicle:getIsOperating()
             if vehicle.shelterMatters_drawLastOperating ~= nil and vehicle.shelterMatters_drawLastOperating ~= isOperating then
                 vehicle.shelterMatters_inShedCache = nil
+                local rootV = vehicle.rootVehicle
+                if rootV and rootV.childVehicles then
+                    for _, childVehicle in ipairs(rootV.childVehicles) do
+                        childVehicle.shelterMatters_inShedCache = nil
+                    end
+                end
             end
             vehicle.shelterMatters_drawLastOperating = isOperating
         end
@@ -274,6 +280,12 @@ function ShelterMatters:updateDamageAmount(vehicle, elapsedInGameHours, multipli
 
     if vehicle.shelterMatters_lastOperating ~= nil and vehicle.shelterMatters_lastOperating ~= isOperating then
         vehicle.shelterMatters_inShedCache = nil
+        local rootV = vehicle.rootVehicle
+        if rootV and rootV.childVehicles then
+            for _, childVehicle in ipairs(rootV.childVehicles) do
+                childVehicle.shelterMatters_inShedCache = nil
+            end
+        end
     end
     vehicle.shelterMatters_lastOperating = isOperating
 
