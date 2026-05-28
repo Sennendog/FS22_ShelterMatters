@@ -170,7 +170,8 @@ function ShelterMatters:draw()
             self._cachedLayout = layout
         end
 
-        local childVehicles = vehicle.rootVehicle.childVehicles
+        local rootV = vehicle.rootVehicle
+        local childVehicles = (rootV and rootV.childVehicles) or {}
 
         for i = 1, #childVehicles do
             local childVehicle = childVehicles[i]
