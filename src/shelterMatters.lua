@@ -202,12 +202,14 @@ end
 Base logic
 ]]
 function ShelterMatters:update(dt)
-    if not g_currentMission:getIsServer() then
+    local currentMission = g_currentMission
+    if not currentMission:getIsServer() then
         return -- Skip on clients
     end
 
+    local environment = currentMission.environment
     -- Get the current in-game time in hours
-    local currentInGameTime = g_currentMission.environment.dayTime / (60 * 60 * 1000) -- ms to hours
+    local currentInGameTime = environment.dayTime / (60 * 60 * 1000) -- ms to hours
 
     -- Initialize the lastUpdateInGameTime if this is the first run
     if self.lastUpdateInGameTime == nil then
@@ -234,7 +236,7 @@ function ShelterMatters:update(dt)
     local weatherMultiplier = self.weatherMultipliers[weather] or 1
 
     -- Apply the damages to vehicles left outside
-    for _, vehicle in pairs(g_currentMission.vehicles) do
+    for _, vehicle in pairs(currentMission.vehicles) do
         self:updateDamageAmount(vehicle, elapsedInGameHours, weatherMultiplier)
     end
 
@@ -318,9 +320,11 @@ end
 
 function ShelterMatters.isNodeInShed(node)
     -- Get the node's position
+    local currentMission = g_currentMission
+    local placeables = currentMission.placeableSystem.placeables
     local vx, vy, vz = getWorldTranslation(node)
 
-    for _, placeable in pairs(g_currentMission.placeableSystem.placeables) do
+    for _, placeable in pairs(placeables) do
         if ShelterMatters.isPointInsideplaceable(vx, vy, vz, placeable) then
             return true
         end
